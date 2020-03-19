@@ -5,20 +5,22 @@ const abi = require('./abi');
 require('dotenv').config();
 const mnemonic = process.env.MNEMONIC;
 const token = process.env.INFURA_TOKEN;
-const infuraUrl = 'https://rinkeby.infura.io/v3/' + token;
+const providerUrl = 'https://rinkeby.infura.io/v3/' + token;
+// const providerUrl = 'HTTP://127.0.0.1:8545';
 const proxyFactoryAddress = '0x76E2cFc1F5Fa8F6a5b3fC4c8F4788F0116861F9B'; // Rinkeby
 const gnosisSafeAddress = '0x34CfAC646f301356fAa8B21e94227e3583Fe3F5F'; // Rinkeby
 
 // Çreate web3
-const web3 = new Web3(infuraUrl);
+const web3 = new Web3(providerUrl);
 
 // Create Wallet
-const httpProvider = new ethers.providers.JsonRpcProvider(infuraUrl);
+const httpProvider = new ethers.providers.JsonRpcProvider(providerUrl);
 const wallet = ethers.Wallet.fromMnemonic(mnemonic).connect(httpProvider);
 console.log(wallet.address);
 
 /**
  * Create Proxy Contract
+ * @returns {string} proxy address
  */
 const createProxyContract = async function() {
     // Get Creation Data
@@ -33,26 +35,34 @@ const createProxyContract = async function() {
         0,
         '0x0000000000000000000000000000000000000000',
     ).encodeABI();
-    console.log(creationData);
+    // console.log(creationData);
 
     // Create Proxy
     const proxyFactory = new ethers.Contract(proxyFactoryAddress, abi.ProxyFactory, wallet);
     const tx = await proxyFactory.createProxy(gnosisSafeAddress, creationData);
     console.log('Create Proxy:', tx.hash);
 
+    // Wait until the tx is mined
+    await tx.wait();
+
     // Get the Proxy Address
-    // const filter = proxyFactory.filters.ProxyCreation(wallet.address, null);
-    proxyFactory.once('ProxyCreation', async (proxy) => {
-        console.log('Proxy address:', proxy);
-    });
+    const receipt = await web3.eth.getTransactionReceipt(tx.hash);
+    // TODO: 如果 address 第一個字元是 0，會有問題
+    const proxyAddress = ethers.utils.hexStripZeros(receipt.logs[0].data);
+    console.log('Proxy Address:', proxyAddress);
+    return proxyAddress;
 }
 
 /**
  * Get the nonce of proxy contract
  * @param {string} proxyAddress
+ * @returns {number} nonce
  */
 const getProxyContractNonce = async function(proxyAddress) {
-    
+    const proxyContract = new ethers.Contract(proxyAddress, abi.GnosisSafe, wallet);
+    const nonce = await proxyContract.nonce();
+    console.log(nonce.toNumber());
+    return nonce.toNumber();
 }
 
 /**
@@ -104,5 +114,8 @@ const executeTx = async function(to, value) {
     // Call proxy contract
 }
 
-// Create Proxy Contract
-createProxyContract();
+// Create proxy contract
+createProxyContract().then(function (proxyAddress){
+    // Get current nonce
+    getProxyContractNonce(proxyAddress);
+});
