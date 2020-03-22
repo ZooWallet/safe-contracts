@@ -4,12 +4,21 @@ const abi = require('./abi');
 const bytecodes = require('./bytecodes');
 
 require('dotenv').config();
-const mnemonic = process.env.MNEMONIC;
+
+/**
+ * For Rinkeby
+ */
 // const token = process.env.INFURA_TOKEN;
 // const providerUrl = 'https://rinkeby.infura.io/v3/' + token;
+/**
+ * For localhost
+ * You need to run ganache with --noVMErrorsOnRPCResponse
+ * e.g. ganache-cli -m "salute pony grab sound dad sister impulse guard rebel hub can aware" --noVMErrorsOnRPCResponse
+ */
 const providerUrl = 'HTTP://127.0.0.1:8545';
 
 // Create Wallet
+const mnemonic = process.env.MNEMONIC;
 const httpProvider = new ethers.providers.JsonRpcProvider(providerUrl);
 const wallet = ethers.Wallet.fromMnemonic(mnemonic, "m/44'/60'/0'/0/0").connect(httpProvider);
 console.log(wallet.address, wallet.privateKey);
@@ -183,7 +192,7 @@ deployMasterCopies().then(async function (result){
  */
 // const proxyFactoryAddress = '0x76E2cFc1F5Fa8F6a5b3fC4c8F4788F0116861F9B'; // Rinkeby
 // const gnosisSafeAddress = '0x34CfAC646f301356fAa8B21e94227e3583Fe3F5F'; // Rinkeby
-// createProxyContract().then(async function (proxyAddress){
+// createProxyContract(proxyFactoryAddress, gnosisSafeAddress).then(async function (proxyAddress){
 //     // Get current nonce
 //     const nonce = await getProxyContractNonce(proxyAddress);
 //     console.log('Nonce:', nonce);
@@ -194,6 +203,6 @@ deployMasterCopies().then(async function (result){
 //     console.log('Send 0.002 ETH:', tx.hash);
 
 //     // Execute tx to send 0.001 ETH
-//     const txHash = await executeTx(proxyAddress, '0x4378Faec5cCfCC6B9E1A8174435eB4354398EDdd', '0.0015', nonce);
+//     const txHash = await executeTx(proxyAddress, '0x4378Faec5cCfCC6B9E1A8174435eB4354398EDdd', '0.0015', nonce, gnosisSafeAddress);
 //     console.log('Withdraw 0.0015 ETH:', txHash);
 // });
