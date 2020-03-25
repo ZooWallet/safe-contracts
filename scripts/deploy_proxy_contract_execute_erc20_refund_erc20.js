@@ -1,16 +1,20 @@
 /**
  *  Goal
  *  - Deploy a proxy contract and exexute a tx to send erc20 token from proxy contract
- *  - Proxy contract doesn't need to pay gas fee
+ *  - Proxy contract refund fee with erc20 token
  * 
  *  Ehereum node
  *  - Using Rinkeby testnet
+ * 
+ *  Server
+ *  - Estimate gas from relayer server
  */
 
 const ethers = require('ethers');
 const Web3 = require('web3');
 const abi = require('./abi');
 const bytecodes = require('./bytecodes');
+const fetch = require('node-fetch');
 
 require('dotenv').config();
 
@@ -99,6 +103,37 @@ const getProxyContractNonce = async function(proxyAddress) {
 }
 
 /**
+ * Get gas price from relayer server
+ * @param {string} proxyAddress
+ * @param {string} to
+ * @param {number} value
+ * @param {string} data
+ * @param {string} operation
+ * @param {string} gasToken
+ * @returns {object} e.g. { safeTxGas: '57000', baseGas: '48160', dataGas: '48160', operationalGas: '0', gasPrice: '1000000001', lastUsedNonce: 0, gasToken: '0x5592EC0cfb4dbc12D3aB100b257153436a1f0FEa' }
+ */
+const getGasPrice = async function(proxyAddress, to, value, data, operation, gasToken) {
+    const checksumProxyAddress = web3.utils.toChecksumAddress(proxyAddress);
+    const url = `https://safe-relay.rinkeby.gnosis.io/api/v2/safes/${checksumProxyAddress}/transactions/estimate/`;
+    const body = {
+        safe: checksumProxyAddress,
+        to: web3.utils.toChecksumAddress(to),
+        value,
+        data,
+        operation,
+        gasToken: web3.utils.toChecksumAddress(gasToken)
+    };
+    const result = await fetch(url, {
+        method: 'post',
+        body: JSON.stringify(body),
+        headers: {'Content-Type': 'application/json'}
+    });
+    const resultJson = await result.json();
+    console.log('Estimated gas result:', resultJson);
+    return resultJson;
+}
+
+/**
  * Execute a tx to send ETH from Proxy Contract
  * @param {string} proxyAddress proxy address
  * @param {string} to address
@@ -113,19 +148,29 @@ const executeTokenTx = async function(proxyAddress, to, destination, value, nonc
 
     // Set parameters of execTransaction()
     const valueWei = web3.utils.toWei('0', 'ether'); // 0 ETH
+
+    // Get tx data
     const tokenContract = new web3.eth.Contract(abi.erc20Token, to);
     const data = tokenContract.methods.transfer(destination, web3.utils.toWei(value, 'ether')).encodeABI(); // Encode data of token transfer()
-    console.log('Data payload:', data);
+    // console.log('Data payload:', data);
+
+    // Set operation and executor
     const operation = 0; // CALL
-    const gasPrice = 0; // If 0, then no refund to relayer
-    const gasToken = '0x0000000000000000000000000000000000000000'; // ETH
     const executor = wallet.address;
+
+    // Set the gasToken to Dai on Rinkeby: https://rinkeby.etherscan.io/address/0x5592EC0cfb4dbc12D3aB100b257153436a1f0FEa
+    const gasToken = '0x5592EC0cfb4dbc12D3aB100b257153436a1f0FEa';
+    // If 0, then no refund to relayer
+    // If > 0, then refund gasToken to executor
+    const gasEstimatedResult = await getGasPrice(proxyAddress, to, valueWei, data, operation, gasToken);
+    const { gasPrice } = gasEstimatedResult;
+    console.log('Get gasPrice', gasPrice);
+
     // Get safe tx estimated gas: https://docs.gnosis.io/safe/docs/docs4/#safe-transaction-gas-limit-estimation
     // To avoid that this method can be used inside a transaction two security measures have been put in place:
-    //     1. The method can only be called from the Safe itself
-    //     2. The response is returned with a revert
-    // NOTICE: If you want to run npx truffle test you need to start a ganache-cli instance. For this it is required to use the --noVMErrorsOnRPCResponse option.
-    //         This option will make sure that ganache-cli behaves the same as other clients (e.g. geth and parity) when handling reverting calls to contracts. 
+    //      1. The method can only be called from the Safe itself
+    //      2. The response is returned with a revert
+    // NOTICE: If you want to run npx truffle test you need to start a ganache-cli instance. For this it is required to use the --noVMErrorsOnRPCResponse option. This option will make sure that ganache-cli behaves the same as other clients (e.g. geth and parity) when handling reverting calls to contracts. 
     let txGasEstimate = 0
     try {
         const gnosisSafeMasterCopy = new web3.eth.Contract(abi.GnosisSafe, gnosisSafeAddress);
@@ -134,12 +179,15 @@ const executeTokenTx = async function(proxyAddress, to, destination, value, nonc
         const estimateResponse = await web3.eth.call({to: proxyAddress, from: proxyAddress, data: estimateData, gasPrice: 0});
         txGasEstimate = new web3.utils.BN(estimateResponse.substring(138), 16);
         txGasEstimate = txGasEstimate.toNumber() + 10000; // Add 10k else we will fail in case of nested calls
-        console.log("Safe Tx Gas estimate: " + txGasEstimate);
+        console.log("Safe Tx Gas estimate:", txGasEstimate);
     } catch(e) {
         console.log("Could not estimate gas:", 3);
     }
-    // Get estimated base gas (Gas costs for that are indipendent of the transaction execution(e.g. base transaction fee, signature check, payment of the refund))
-    let baseGasEstimate = 0; // If one of the owners executes this transaction it is not really required to set this (so it can be 0) TODO: if using erc20 token
+    // Get estimated base gas (Gas costs for that are indipendent of the transaction execution)
+    // e.g. base transaction fee, signature check, payment of the refund
+    // If one of the owners executes this transaction it is not really required to set this (so it can be 0)
+    const baseGasEstimate = gasEstimatedResult.baseGas;
+    console.log("Base Gas estimate:", baseGasEstimate);
     
     // Create typed data hash
     const transactionHash = await proxyContract.getTransactionHash(
@@ -204,21 +252,23 @@ const executeTokenTx = async function(proxyAddress, to, destination, value, nonc
 const proxyFactoryAddress = '0x76E2cFc1F5Fa8F6a5b3fC4c8F4788F0116861F9B'; // Rinkeby
 const gnosisSafeAddress = '0x34CfAC646f301356fAa8B21e94227e3583Fe3F5F'; // Rinkeby
 const tokenAddress = '0x68a6481263fd2270489e0d174148ceb27096e175'; // MK7 token
+const gasTokenAddress = '0x5592EC0cfb4dbc12D3aB100b257153436a1f0FEa'; // Dai token
 createProxyContract(proxyFactoryAddress, gnosisSafeAddress).then(async function (proxyAddress){
     // Get current nonce
     const nonce = await getProxyContractNonce(proxyAddress);
     console.log('Nonce:', nonce);
 
-    // 如將 gasPrice 設為 0，就不需要 refund 手續費給 relayer，所以也不用先送 ETH 給 proxy contract
-    // const tx = await wallet.sendTransaction({ to: proxyAddress, value: ethers.utils.parseEther('0.001')});
-    // await tx.wait();
-    // console.log('Send 0.001 ETH:', tx.hash);
+    // Send 0.5 Dai to proxy contract to pay fee
+    const gasTokenContract = new ethers.Contract(gasTokenAddress, abi.erc20Token, wallet);
+    const tx = await gasTokenContract.transfer(proxyAddress, web3.utils.toWei('0.5', 'ether'));
+    await tx.wait();
+    console.log('-----Send 0.5 Dai:', tx.hash);
 
     // Send 0.1 MK7 to proxy contract
     const tokenContract = new ethers.Contract(tokenAddress, abi.erc20Token, wallet);
     const tx2 = await tokenContract.transfer(proxyAddress, ethers.utils.parseEther('0.1'));
     await tx2.wait();
-    console.log('Send 0.1 MK7:', tx2.hash);
+    console.log('-----Send 0.1 MK7:', tx2.hash);
 
     // Execute tx to withdraw 0.1 MK7
     const txHash = await executeTokenTx(
@@ -229,5 +279,5 @@ createProxyContract(proxyFactoryAddress, gnosisSafeAddress).then(async function 
         nonce,
         gnosisSafeAddress,
     );
-    console.log('Withdraw 0.1 MK7 token:', txHash);
+    console.log('-----Withdraw 0.1 MK7 token:', txHash);
 });

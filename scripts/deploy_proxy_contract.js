@@ -1,3 +1,11 @@
+/**
+ *  Goal
+ *  - Deploy proxy contract and exexute a tx to send ETH from proxy contract
+ * 
+ *  Ehereum node
+ *  - Using localhost, run ganache: ganache-cli -m "salute pony grab sound dad sister impulse guard rebel hub can aware" --noVMErrorsOnRPCResponse
+ */
+
 const ethers = require('ethers');
 const Web3 = require('web3');
 const abi = require('./abi');
@@ -105,7 +113,7 @@ const executeTx = async function(proxyAddress, to, value, nonce, gnosisSafeAddre
     const valueWei = web3.utils.toWei(value, 'ether');
     const data = '0x'; // tx data payload
     const operation = 0; // CALL
-    const gasPrice = web3.utils.toWei('10', 'gwei'); // TODO: how to get gasPrice if gasToken is erc20 token
+    const gasPrice = web3.utils.toWei('10', 'gwei'); // If set to 0, then proxy contract no need to refund
     const gasToken = '0x0000000000000000000000000000000000000000'; // ETH
     const executor = wallet.address;
     // Get safe tx estimated gas: https://docs.gnosis.io/safe/docs/docs4/#safe-transaction-gas-limit-estimation
@@ -127,7 +135,7 @@ const executeTx = async function(proxyAddress, to, value, nonce, gnosisSafeAddre
         console.log("Could not estimate gas:", 3);
     }
     // Get estimated base gas (Gas costs for that are indipendent of the transaction execution(e.g. base transaction fee, signature check, payment of the refund))
-    let baseGasEstimate = 0; // If one of the owners executes this transaction it is not really required to set this (so it can be 0) TODO: if using erc20 token
+    let baseGasEstimate = 0; // If one of the owners executes this transaction it is not really required to set this (so it can be 0)
 
     
     // Create typed data hash
