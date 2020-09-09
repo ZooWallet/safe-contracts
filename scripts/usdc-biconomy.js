@@ -36,9 +36,14 @@ const bufferFromHexString = (string) => {
     return Buffer.from(strip0x(string), "hex");
 };
 
-const hexStringFromBuffer = (string) => {
-    return "0x" + string.toString("hex");
+const hexStringFromBuffer = (buffer) => {
+    return "0x" + buffer.toString("hex");
 };
+
+const ecSign = (digest, key) => {
+    const sig = ecsign(bufferFromHexString(digest), bufferFromHexString(key));
+    return { v: sig.v, r: hexStringFromBuffer(sig.r), s: hexStringFromBuffer(sig.s)}
+;} 
 
 const entryPoint = async () => {
     /* Call permit */
@@ -54,15 +59,15 @@ const entryPoint = async () => {
     console.log('data', data);
 
     // Create digest
-    const digest = web3.utils.keccak256(
-        '0x1901' +
-        strip0x(DOMAIN_SEPARATOR) +
-        strip0x(web3.utils.keccak256(data))
-    );
-    console.log('digest', digest);
+    // const digest = web3.utils.keccak256(
+    //     '0x1901' +
+    //     strip0x(DOMAIN_SEPARATOR) +
+    //     strip0x(web3.utils.keccak256(data))
+    // );
+    // console.log('digest', digest);
     // Create digest 2 (Same as above)
-    // const digest2 = web3.utils.soliditySha3('0x1901', DOMAIN_SEPARATOR, web3.utils.keccak256(data));
-    // console.log('digest2', digest2)
+    const digest2 = web3.utils.soliditySha3('0x1901', DOMAIN_SEPARATOR, web3.utils.keccak256(data));
+    console.log('digest2', digest2)
 
     // Sign 1
     // const sig = await web3.eth.accounts.sign(digest, usdcVaultKey);
@@ -72,9 +77,9 @@ const entryPoint = async () => {
     // console.log(recover);
     // console.log(usdcVault === recover);
 
-    // Sign 2 (參考 https://github.com/centrehq/centre-tokens/blob/5013157edecbaf5da7fb9e3afa85992965077c88/test/helpers/index.ts#L54)
-    const sig2 = await ecsign(bufferFromHexString(digest), bufferFromHexString(usdcVaultKey));
-    console.log('sig2', sig2.v, hexStringFromBuffer(sig2.r), hexStringFromBuffer(sig2.s));
+    // Sign 2 (Refer https://github.com/centrehq/centre-tokens/blob/5013157edecbaf5da7fb9e3afa85992965077c88/test/helpers/index.ts#L54)
+    const sig = ecSign(digest2, usdcVaultKey);
+    console.log('sig', sig.v, sig.r, sig.s);
     // Try to ecrecover (this will fail)
     // const recover2 = ecrecover(bufferFromHexString(digest), sig2.v, sig2.r, sig2.s);
     // console.log(recover2);
@@ -82,7 +87,7 @@ const entryPoint = async () => {
     // console.log(usdcVault === hexStringFromBuffer(recover2));
 
     // Call Permit
-    const tx = await usdcContractEthers.permit(usdcVault, relayer, value, MAX_UINT256, sig2.v, hexStringFromBuffer(sig2.r), hexStringFromBuffer(sig2.s));
+    const tx = await usdcContractEthers.permit(usdcVault, relayer, value, MAX_UINT256, sig.v, sig.r, sig.s);
     console.log(tx.hash);
 
     /* Call tranferFrom */
