@@ -42,7 +42,7 @@
     "bignumber.js": "github:frozeman/bignumber.js-nolookahead",
     "eth-lightwallet": "^3.0.1",
     "ethereumjs-abi": "^0.6.5",
-    "ethereumjs-util": "^6.0.0",
+    "ethereumjs-util": "^6.2.1",
     "ethers": "^4.0.45",
     "ganache-cli": "^6.3.0",
     "random-buffer": "*",
