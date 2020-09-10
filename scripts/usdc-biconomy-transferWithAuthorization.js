@@ -46,7 +46,7 @@ const ecSign = (digest, key) => {
 ;} 
 
 const entryPoint = async () => {
-    /* Call permit */
+    /* Create data and signature */
 
     // Get data
     // const nonce = await usdcContract.methods.nonces(usdcVault).call();
@@ -82,7 +82,7 @@ const entryPoint = async () => {
     const sig = ecSign(digest2, usdcVaultKey);
     console.log('sig', sig.v, sig.r, sig.s);
 
-    /* Call tranferFrom */
+    /* Call transferWithAuthorization */
     const transferTx = await usdcContractEthers.transferWithAuthorization(
         usdcVault,
         destination,
