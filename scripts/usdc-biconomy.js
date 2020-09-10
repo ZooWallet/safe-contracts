@@ -50,7 +50,7 @@ const entryPoint = async () => {
 
     // Get data
     const nonce = await usdcContract.methods.nonces(usdcVault).call();
-    const value = 1000000000;
+    const value = 100;
     // const deadline = 1914710400; // 09/04/2030 @ 12:00am (UTC)
     const MAX_UINT256 = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
@@ -91,8 +91,8 @@ const entryPoint = async () => {
     console.log(tx.hash);
 
     /* Call tranferFrom */
-
-    /* Check balance */
+    const transferTx = await usdcContractEthers.transferFrom(usdcVault, destination, value);
+    console.log(transferTx.hash);
 };
 
 entryPoint();
