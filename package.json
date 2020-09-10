@@ -40,6 +40,7 @@
     "@openzeppelin/cli": "^2.5.1",
     "@openzeppelin/upgrades": "^2.5.1",
     "bignumber.js": "github:frozeman/bignumber.js-nolookahead",
+    "crypto": "^1.0.1",
     "eth-lightwallet": "^3.0.1",
     "ethereumjs-abi": "^0.6.5",
     "ethereumjs-util": "^6.2.1",

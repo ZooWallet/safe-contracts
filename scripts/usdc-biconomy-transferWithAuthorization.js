@@ -2,7 +2,7 @@ const ethers = require('ethers');
 const { ecsign, ecrecover } = require('ethereumjs-util');
 const Web3 = require('web3');
 const abi = require('./abi');
-const { usdc } = require('./abi');
+const crypto = require('crypto');
 
 // Address and constant
 const usdcVault = '0xBdF726e6eBA19342478415aF22ec097efc94258f'; // With USDC
@@ -10,7 +10,7 @@ const usdcVaultKey = '0x9b9f26649b3c441bfd0a020acce5952ff35508b74a95d9fa7ac453af
 const relayer = '0xC5fdf4076b8F3A5357c5E395ab970B5B54098Fef'; // With ETH
 const relayerKey = '0x0dbbe8e4ae425a6d2687f1a7e3ba17bc98c673636790f1b8ad91193c05875ef1';
 const destination = '0x64398d0cdC02D21f6c75c1c2Ea063dF2a79A6e95'; // With nothing
-const PERMIT_TYPEHASH = '0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9';
+const TRANSFER_WITH_AUTHORIZATION_TYPEHASH = '0x7c7c6cdb67a18743f49ec6fa9b35f50d52ed05cbed4cc592e13b44501c1a2267';
 const DOMAIN_SEPARATOR = '0x3e7f80f6881370f25d8142280356e618faf1a0c357b7c60b85b9900f9d0f48d7';
 
 // Setup web3
@@ -49,13 +49,14 @@ const entryPoint = async () => {
     /* Call permit */
 
     // Get data
-    const nonce = await usdcContract.methods.nonces(usdcVault).call();
+    // const nonce = await usdcContract.methods.nonces(usdcVault).call();
+    const nonce = hexStringFromBuffer(crypto.randomBytes(32));
     const value = 100;
-    // const deadline = 1914710400; // 09/04/2030 @ 12:00am (UTC)
-    const MAX_UINT256 = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    const validAfter = 0;
+    const vaildBefore = "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
     // Encode data
-    const data = web3.eth.abi.encodeParameters(['bytes32','address','address','uint256','uint256','uint256'], [PERMIT_TYPEHASH, usdcVault, relayer, value, nonce, MAX_UINT256]);
+    const data = web3.eth.abi.encodeParameters(['bytes32','address','address','uint256','uint256','uint256','bytes32'], [TRANSFER_WITH_AUTHORIZATION_TYPEHASH, usdcVault, destination, value, validAfter, vaildBefore, nonce]);
     console.log('data', data);
 
     // Create digest
@@ -80,18 +81,19 @@ const entryPoint = async () => {
     // Sign 2 (Refer https://github.com/centrehq/centre-tokens/blob/5013157edecbaf5da7fb9e3afa85992965077c88/test/helpers/index.ts#L54)
     const sig = ecSign(digest2, usdcVaultKey);
     console.log('sig', sig.v, sig.r, sig.s);
-    // Try to ecrecover (this will fail)
-    // const recover2 = ecrecover(bufferFromHexString(digest), sig2.v, sig2.r, sig2.s);
-    // console.log(recover2);
-    // console.log(hexStringFromBuffer(recover2));
-    // console.log(usdcVault === hexStringFromBuffer(recover2));
-
-    // Call Permit
-    const tx = await usdcContractEthers.permit(usdcVault, relayer, value, MAX_UINT256, sig.v, sig.r, sig.s);
-    console.log(tx.hash);
 
     /* Call tranferFrom */
-    const transferTx = await usdcContractEthers.transferFrom(usdcVault, destination, value);
+    const transferTx = await usdcContractEthers.transferWithAuthorization(
+        usdcVault,
+        destination,
+        value,
+        validAfter,
+        vaildBefore,
+        nonce,
+        sig.v,
+        sig.r,
+        sig.s
+    );
     console.log(transferTx.hash);
 };
 
